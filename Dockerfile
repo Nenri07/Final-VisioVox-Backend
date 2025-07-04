@@ -6,6 +6,7 @@ WORKDIR /app
 
 # Install system dependencies
 # Install system dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     libgl1-mesa-glx \
@@ -17,7 +18,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     bzip2 \
     cmake \
-    g++ \                     # ✅ C++ compiler required for dlib
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 
 
