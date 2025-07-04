@@ -25,7 +25,7 @@ RUN pip install --upgrade pip && \
     torchaudio==2.4.1+cpu \
     --index-url https://download.pytorch.org/whl/cpu
 
-# Then install other packages from PyPI
+# Then install other packages from PyPI with compatible versions
 RUN pip install --user --no-cache-dir -r requirements.txt
 
 # Download dlib model
