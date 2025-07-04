@@ -15,9 +15,9 @@ torch==2.4.1
 torchvision==0.19.1
 torchaudio==2.4.1
 opencv-python==4.11.0.86
-numpy==1.26.4          # This version *should* be fine with Python 3.10.
-scipy==1.13.1          # This version *should* be fine with Python 3.10.
-scikit-image==0.25.2   # Reverting to your desired version, compatible with Python 3.10+
+numpy==2.1.3           # Compatible with Python 3.10+
+scipy==1.15.3          # Compatible with Python 3.10+
+scikit-image==0.25.2   # Compatible with Python 3.10+
 pillow==11.2.1
 
 # Face detection and landmarks
@@ -53,12 +53,12 @@ annotated-types==0.7.0
 filelock==3.13.1
 packaging==25.0
 
-# Numerical computing (Reverting to your desired versions, compatible with Python 3.10+)
-numba==0.61.2           # Reverting to your desired version, compatible with Python 3.10+
-llvmlite==0.44.0        # Reverting to your desired version, compatible with Python 3.10+
+# Numerical computing
+numba==0.61.2           # Compatible with Python 3.10+
+llvmlite==0.44.0        # Compatible with Python 3.10+
 sympy==1.13.3
 mpmath==1.3.0
-networkx==3.3           # Reverting to your desired version, compatible with Python 3.10+
+networkx==3.3           # Compatible with Python 3.10+
 
 # Image processing
 tifffile==2025.5.10
