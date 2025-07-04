@@ -15,9 +15,9 @@ torch==2.4.1
 torchvision==0.19.1
 torchaudio==2.4.1
 opencv-python==4.11.0.86
-numpy==1.26.4 # Changed numpy version to be compatible with Python 3.9
-scipy==1.13.1 # Changed scipy version to be compatible with numpy 1.26.4 and Python 3.9
-scikit-image==0.25.2
+numpy==1.26.4
+scipy==1.13.1
+scikit-image==0.19.3 # Changed scikit-image version to be compatible with Python 3.9
 pillow==11.2.1
 
 # Face detection and landmarks
