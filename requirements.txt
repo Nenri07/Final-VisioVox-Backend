@@ -21,7 +21,7 @@ scikit-image==0.25.2   # Compatible with Python 3.10+
 pillow==11.2.1
 
 # Face detection and landmarks
-dlib==19.24.9
+dlib==19.24.9           # Now should build with cmake + build-essential
 face-alignment==1.4.1
 
 # Video and audio processing
