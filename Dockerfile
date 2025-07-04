@@ -3,20 +3,23 @@ FROM python:3.10-slim as builder
 
 WORKDIR /app
 
-# Install only essential build dependencies
+# Install system dependencies including CMake
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     wget \
     bzip2 \
+    cmake \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies with CPU-only PyTorch
 COPY requirements.txt .
-RUN pip install --user --no-cache-dir \
+RUN pip install --upgrade pip && \
+    pip install --user --no-cache-dir \
     torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu && \
     pip install --user --no-cache-dir -r requirements.txt
 
-# Download dlib model (faster than building)
+# Download dlib model
 RUN mkdir -p /models && \
     wget -q -O /models/shape_predictor.dat.bz2 \
     "http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2" && \
