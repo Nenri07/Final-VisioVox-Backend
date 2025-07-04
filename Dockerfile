@@ -3,7 +3,7 @@ FROM python:3.10-slim as builder
 
 WORKDIR /app
 
-# Install system dependencies with build essentials
+# Install system dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     wget \
@@ -16,15 +16,17 @@ RUN apt-get update && \
     libgl1-mesa-glx \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies with CPU-only PyTorch
+# First install PyTorch from their index
 COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install --user --no-cache-dir \
     torch==2.4.1+cpu \
     torchvision==0.19.1+cpu \
     torchaudio==2.4.1+cpu \
-    --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --user --no-cache-dir -r requirements.txt
+    --index-url https://download.pytorch.org/whl/cpu
+
+# Then install other packages from PyPI
+RUN pip install --user --no-cache-dir -r requirements.txt
 
 # Download dlib model
 RUN mkdir -p /models && \
@@ -47,7 +49,7 @@ RUN apt-get update && \
     libgl1-mesa-glx \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy only what we need from builder
+# Copy from builder
 COPY --from=builder /root/.local /root/.local
 COPY --from=builder /models /models
 COPY . .
@@ -59,17 +61,17 @@ ENV PATH=/root/.local/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 
-# Create needed directories
+# Create directories
 RUN mkdir -p static uploads outputs temp pretrain samples logs
 
-# Final cleanup
+# Cleanup
 RUN apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# Health check for Railway
+# Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:$PORT/healthz || exit 1
 
-# Run with Railway's PORT support
+# Run command
 CMD ["sh", "-c", "uvicorn api:app --host 0.0.0.0 --port ${PORT} --workers 2"]
