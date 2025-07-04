@@ -14,9 +14,10 @@ import tempfile
 from pathlib import Path
 import math
 
-# Configure ImageMagick for moviepy
+# DEPLOYMENT CHANGE 1: Remove hardcoded ImageMagick path for Railway
+# Railway will handle ImageMagick installation automatically
 import moviepy.config as cf
-cf.IMAGEMAGICK_BINARY = r"C:\Program Files\ImageMagick-7.1.1-Q16-HDRI\magick.exe"
+# cf.IMAGEMAGICK_BINARY = r"C:\Program Files\ImageMagick-7.1.1-Q16-HDRI\magick.exe"  # Removed for deployment
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -212,8 +213,9 @@ async def predict(file: UploadFile = File(...)):
             # Continue without video - audio will still be available
             output_video_path = None
 
-        # Return URLs - CHECK IF FILES ACTUALLY EXIST
-        base_url = "http://192.168.100.19:8080"
+        # DEPLOYMENT CHANGE 2: Use environment variable for base URL
+        # This will automatically use Railway's provided URL
+        base_url = os.environ.get("RAILWAY_STATIC_URL", "http://localhost:8080")
         
         # Verify audio file exists
         audio_uri = None
@@ -282,6 +284,7 @@ async def get_output_file(filename: str):
     else:
         return FileResponse(file_path)
 
+# DEPLOYMENT CHANGE 3: Use environment variable for PORT
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8080))
