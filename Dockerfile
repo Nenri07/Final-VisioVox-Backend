@@ -5,6 +5,7 @@ FROM python:3.10-slim-buster
 WORKDIR /app
 
 # Install system dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     libgl1-mesa-glx \
@@ -16,7 +17,9 @@ RUN apt-get update && apt-get install -y \
     wget \
     bzip2 \
     cmake \
+    g++ \                     # ✅ C++ compiler required for dlib
     && rm -rf /var/lib/apt/lists/*
+
 
 # Copy requirements file first for layer caching
 COPY requirements.txt .
