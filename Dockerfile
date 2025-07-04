@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
     libgomp1 \
     wget \
     bzip2 \
+    cmake \          # <--- ADD THIS LINE: Install CMake
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
