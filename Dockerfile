@@ -55,6 +55,6 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 # Assuming your main FastAPI app instance is called `app` in `main.py`
 # If your main FastAPI app instance is called `app` in `api.py`, then use `api:app`.
 # Use the $PORT environment variable provided by Railway.
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "${PORT}"]
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "${PORT}"]
 # Assuming your main FastAPI app is in `main.py` and the app instance is `app`.
 # If it's in `api.py`, change `main:app` to `api:app`.
