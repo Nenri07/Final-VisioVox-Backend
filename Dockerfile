@@ -1,4 +1,4 @@
-# <--- CRITICAL CHANGE: Changed from 3.9 to 3.10
+# Use Python 3.10 (critical for some packages like torch)
 FROM python:3.10-slim-buster
 
 # Set working directory
@@ -15,33 +15,34 @@ RUN apt-get update && apt-get install -y \
     libgomp1 \
     wget \
     bzip2 \
-    cmake \               # <--- REMOVED THE BACKSLASH HERE
+    cmake \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
+# Copy requirements file first for layer caching
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python packages
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy app code
 COPY . .
 
 # Create necessary directories
 RUN mkdir -p static uploads outputs temp pretrain samples logs
 
-# Download dlib predictor if not present
+# Download dlib predictor if not already present
 RUN if [ ! -f "shape_predictor_68_face_landmarks.dat" ]; then \
     wget -O shape_predictor_68_face_landmarks.dat.bz2 "http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2" && \
     bunzip2 shape_predictor_68_face_landmarks.dat.bz2; \
     fi
 
-# Expose port
+# Expose FastAPI default port
 EXPOSE 8000
 
-# Health check
+# Add healthcheck endpoint
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/healthz || exit 1
 
-# Start command
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "${PORT}"]
+# Start the FastAPI server
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
