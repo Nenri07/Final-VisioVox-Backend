@@ -1,28 +1,34 @@
-# Multi-stage build for Railway deployment
-FROM python:3.10-alpine AS builder
+# Alternative Debian-based Dockerfile (more compatible but larger)
+FROM python:3.10-slim AS builder
 
 WORKDIR /app
 
 # Install build dependencies
-RUN apk add --no-cache \
-    build-base \
+RUN apt-get update && apt-get install -y \
+    build-essential \
     cmake \
-    openblas-dev \
-    jpeg-dev \
+    libopenblas-dev \
+    libjpeg-dev \
     libpng-dev \
-    tiff-dev \
+    libtiff-dev \
     libwebp-dev \
     libx11-dev \
     libxext-dev \
     libxrender-dev \
-    mesa-dev \
-    glib-dev \
-    ffmpeg-dev \
+    libgl1-mesa-dev \
+    libglib2.0-dev \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    ffmpeg \
     wget \
     bzip2 \
-    git
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
+# Copy requirements
 COPY requirements.txt .
 
 # Create virtual environment
@@ -30,10 +36,17 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Install Python packages
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir \
-    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Install PyTorch CPU version first
+RUN pip install --no-cache-dir \
+    torch==2.4.1+cpu \
+    torchvision==0.19.1+cpu \
+    torchaudio==2.4.1+cpu \
+    --index-url https://download.pytorch.org/whl/cpu
+
+# Install other requirements
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Download dlib model
 RUN mkdir -p /models && \
@@ -42,24 +55,26 @@ RUN mkdir -p /models && \
     bunzip2 /models/shape_predictor_68_face_landmarks.dat.bz2
 
 # Final runtime image
-FROM python:3.10-alpine AS runtime
+FROM python:3.10-slim AS runtime
 
 # Install runtime dependencies
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y \
     ffmpeg \
-    libgomp \
-    openblas \
-    jpeg \
-    libpng \
-    tiff \
-    libwebp \
-    libx11 \
-    libxext \
-    libxrender \
-    mesa \
-    glib \
+    libgomp1 \
+    libopenblas0 \
+    libjpeg62-turbo \
+    libpng16-16 \
+    libtiff5 \
+    libwebp6 \
+    libx11-6 \
+    libxext6 \
+    libxrender1 \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
     curl \
-    imagemagick
+    imagemagick \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
