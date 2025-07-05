@@ -1,35 +1,49 @@
-FROM python:3.10-slim-buster
+# Stage 1: Builder stage for compiling dependencies
+FROM python:3.10-slim-buster as builder
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies needed for compilation (dlib) and runtime
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1 \
+# Install build-time system dependencies (including g++ and make for dlib/cmake)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     wget \
     bzip2 \
     cmake \
     build-essential \
-    curl \
+    ffmpeg \           # ffmpeg needed for moviepy compilation if any
+    libsm6 \           # Moviepy dependency often needed
+    libxext6 \         # Moviepy dependency often needed
+    libxrender-dev \   # Moviepy dependency often needed
+    libglib2.0-0 \     # Moviepy dependency often needed
+    libgl1-mesa-glx \  # Moviepy dependency often needed for rendering
+    libgomp1 \         # OpenMP dependency
+    curl \             # For healthcheck in final stage
     && rm -rf /var/lib/apt/lists/* && apt-get clean
 
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies (with CPU-only PyTorch, ensure dlib builds here)
+RUN pip install --no-cache-dir \
+    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Download dlib predictor
+# Download and extract dlib model
 RUN mkdir -p /models && \
     wget -q -O /models/shape_predictor_68_face_landmarks.dat.bz2 \
     "http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2" && \
     bunzip2 /models/shape_predictor_68_face_landmarks.dat.bz2
+
+# Stage 2: Final lightweight image
+FROM python:3.10-slim-buster
+
+WORKDIR /app
+
+# Copy only necessary files from builder
+# Copy Python site-packages (where pip installed everything)
+COPY --from=builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
+# Copy dlib model
+COPY --from=builder /models /models
 
 # Copy application code
 COPY . .
@@ -38,21 +52,21 @@ COPY . .
 ENV DLIB_SHAPE_PREDICTOR=/models/shape_predictor_68_face_landmarks.dat
 ENV PYTHONUNBUFFERED=1
 
-# Create necessary directories
+# Create required directories
 RUN mkdir -p static uploads outputs temp pretrain samples logs
 
-# EXPOSE the default port for the application (Railway will map an external port to this)
+# Clean up apt cache (important for final image size if any new apt packages were installed in this stage)
+# In this specific multi-stage setup, almost everything is from the builder, but it's good practice.
+RUN apt-get update && apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Expose port (Railway will override $PORT)
 EXPOSE 8000
 
-# Health check (using /healthz as per your api.py)
+# Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/healthz || exit 1
 
-# Use ENTRYPOINT to ensure the shell processes the environment variable
-# The ENTRYPOINT defines the primary command that will be executed when the container starts.
-# CMD provides default arguments to the ENTRYPOINT.
+# Start command
 ENTRYPOINT ["uvicorn", "api:app", "--host", "0.0.0.0"]
-
-# CMD provides the default port. Railway injects the PORT env var.
-# If PORT is set by Railway, it will be used. Otherwise, it defaults to 8000.
 CMD ["--port", "${PORT:-8000}"]
