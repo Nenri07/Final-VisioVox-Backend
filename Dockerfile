@@ -6,18 +6,18 @@ WORKDIR /app
 # Install build-time system dependencies (including g++ and make for dlib/cmake)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
     wget \
     bzip2 \
     cmake \
     build-essential \
-    ffmpeg \           # ffmpeg needed for moviepy compilation if any
-    libsm6 \           # Moviepy dependency often needed
-    libxext6 \         # Moviepy dependency often needed
-    libxrender-dev \   # Moviepy dependency often needed
-    libglib2.0-0 \     # Moviepy dependency often needed
-    libgl1-mesa-glx \  # Moviepy dependency often needed for rendering
-    libgomp1 \         # OpenMP dependency
-    curl \             # For healthcheck in final stage
+    curl \
     && rm -rf /var/lib/apt/lists/* && apt-get clean
 
 # Copy requirements first for better caching
@@ -56,7 +56,6 @@ ENV PYTHONUNBUFFERED=1
 RUN mkdir -p static uploads outputs temp pretrain samples logs
 
 # Clean up apt cache (important for final image size if any new apt packages were installed in this stage)
-# In this specific multi-stage setup, almost everything is from the builder, but it's good practice.
 RUN apt-get update && apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
