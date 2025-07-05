@@ -34,5 +34,5 @@ RUN mkdir -p static uploads outputs temp pretrain
 # Health check
 HEALTHCHECK CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
-# Start the app
-CMD uvicorn api:app --host 0.0.0.0 --port ${PORT:-8000}
+# FIXED: Use shell form to properly handle environment variables
+CMD ["sh", "-c", "uvicorn api:app --host 0.0.0.0 --port ${PORT:-8000}"]
