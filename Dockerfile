@@ -2,34 +2,21 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install only essential packages
-RUN apt-get update && apt-get install -y \
-    cmake \
-    build-essential \
-    ffmpeg \
-    curl \
-    wget \
-    && rm -rf /var/lib/apt/lists/*
+# Install ONLY what we absolutely need
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install
+# Copy and install requirements
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Download dlib model
-RUN mkdir -p /models && \
-    wget -q -O /models/shape_predictor_68_face_landmarks.dat.bz2 \
-    "http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2" && \
-    bunzip2 /models/shape_predictor_68_face_landmarks.dat.bz2
 
 # Copy app
 COPY . .
 
-# Environment variables
-ENV DLIB_SHAPE_PREDICTOR=/models/shape_predictor_68_face_landmarks.dat
+# Environment
 ENV PYTHONUNBUFFERED=1
 
 # Create directories
-RUN mkdir -p static uploads outputs temp pretrain
+RUN mkdir -p static uploads outputs temp pretrain models
 
-# Start command - FIXED
+# Start
 CMD ["sh", "-c", "uvicorn api:app --host 0.0.0.0 --port ${PORT:-8000}"]
