@@ -1,71 +1,35 @@
-# Stage 1: Builder stage for compiling dependencies
-FROM python:3.10-slim-buster as builder
+FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install build-time system dependencies (including g++ and make for dlib/cmake)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    ffmpeg \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1 \
-    wget \
-    bzip2 \
+# Install only essential packages
+RUN apt-get update && apt-get install -y \
     cmake \
     build-essential \
+    ffmpeg \
     curl \
-    && rm -rf /var/lib/apt/lists/* && apt-get clean
+    wget \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
+# Copy requirements and install
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Python dependencies (with CPU-only PyTorch, ensure dlib builds here)
-RUN pip install --no-cache-dir \
-    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir -r requirements.txt
-
-# Download and extract dlib model
+# Download dlib model
 RUN mkdir -p /models && \
     wget -q -O /models/shape_predictor_68_face_landmarks.dat.bz2 \
     "http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2" && \
     bunzip2 /models/shape_predictor_68_face_landmarks.dat.bz2
 
-# Stage 2: Final lightweight image
-FROM python:3.10-slim-buster
-
-WORKDIR /app
-
-# Copy only necessary files from builder
-# Copy Python site-packages (where pip installed everything)
-COPY --from=builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
-# Copy dlib model
-COPY --from=builder /models /models
-
-# Copy application code
+# Copy app
 COPY . .
 
-# Set environment variables
+# Environment variables
 ENV DLIB_SHAPE_PREDICTOR=/models/shape_predictor_68_face_landmarks.dat
 ENV PYTHONUNBUFFERED=1
 
-# Create required directories
-RUN mkdir -p static uploads outputs temp pretrain samples logs
+# Create directories
+RUN mkdir -p static uploads outputs temp pretrain
 
-# Clean up apt cache (important for final image size if any new apt packages were installed in this stage)
-RUN apt-get update && apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-# Expose port (Railway will override $PORT)
-EXPOSE 8000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/healthz || exit 1
-
-# Start command
-ENTRYPOINT ["uvicorn", "api:app", "--host", "0.0.0.0"]
-CMD ["--port", "${PORT:-8000}"]
+# Start command - FIXED
+CMD ["sh", "-c", "uvicorn api:app --host 0.0.0.0 --port ${PORT:-8000}"]
