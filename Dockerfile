@@ -23,5 +23,5 @@ ENV PYTHONUNBUFFERED=1
 # Create directories
 RUN mkdir -p static uploads outputs temp pretrain models
 
-# Start
-CMD ["sh", "-c", "uvicorn api:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# FIXED: Use Python to handle PORT variable
+CMD python -c "import os; os.system(f'uvicorn api:app --host 0.0.0.0 --port {os.environ.get(\"PORT\", \"8000\")}')"
