@@ -2,8 +2,10 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install only essential system packages
+# Install cmake and build tools for dlib
 RUN apt-get update && apt-get install -y \
+    cmake \
+    build-essential \
     ffmpeg \
     curl \
     wget \
