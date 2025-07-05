@@ -15,8 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     bzip2 \
     cmake \
-    build-essential \ # Add build-essential for g++ and make
-    curl \            # curl for healthcheck
+    build-essential \
+    curl \
     && rm -rf /var/lib/apt/lists/* && apt-get clean
 
 # Copy requirements first for better caching
@@ -36,21 +36,17 @@ COPY . .
 
 # Set environment variables
 ENV DLIB_SHAPE_PREDICTOR=/models/shape_predictor_68_face_landmarks.dat
-ENV PYTHONUNBUFFERED=1 # Ensures Python output is unbuffered
+ENV PYTHONUNBUFFERED=1
 
 # Create necessary directories
-RUN mkdir -p static uploads outputs temp pretrain samples logs # Added samples and logs based on previous Dockerfile
+RUN mkdir -p static uploads outputs temp pretrain samples logs
 
 # EXPOSE the default port for the application (Railway will map an external port to this)
 EXPOSE 8000
 
-# Health check
+# Health check (using /healthz as per your api.py)
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/healthz || exit 1
-    # Note: Using a fixed port for healthcheck if $PORT is giving issues for curl.
-    # Railway's health check often runs *inside* the container, so it can hit localhost:8000
-    # if your app correctly binds to 8000 (which ${PORT:-8000} handles).
-    # You can change to `http://localhost:${PORT}/healthz` if you verify it works.
 
 # Use ENTRYPOINT to ensure the shell processes the environment variable
 # The ENTRYPOINT defines the primary command that will be executed when the container starts.
