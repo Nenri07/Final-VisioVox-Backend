@@ -14,22 +14,18 @@ import tempfile
 from pathlib import Path
 import math
 
-# DEPLOYMENT CHANGE 1: Remove hardcoded ImageMagick path for Railway
-# Railway will handle ImageMagick installation automatically
-import moviepy.config as cf
-# cf.IMAGEMAGICK_BINARY = r"C:\Program Files\ImageMagick-7.1.1-Q16-HDRI\magick.exe"  # Removed for deployment
-
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+app = FastAPI(title="Lipreading API", version="1.0.0")
 
 # Create directories
 os.makedirs("static", exist_ok=True)
 os.makedirs("uploads", exist_ok=True)
 os.makedirs("outputs", exist_ok=True)
 os.makedirs("temp", exist_ok=True)
+os.makedirs("pretrain", exist_ok=True)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -48,7 +44,7 @@ def loop_audio(audio_clip, target_duration):
     """Custom function to loop audio to match target duration"""
     if audio_clip.duration >= target_duration:
         return audio_clip.subclip(0, target_duration)
-    
+        
     # Calculate how many times we need to repeat
     repeat_count = math.ceil(target_duration / audio_clip.duration)
     
@@ -59,13 +55,27 @@ def loop_audio(audio_clip, target_duration):
     looped_audio = concatenate_audioclips(audio_clips)
     return looped_audio.subclip(0, target_duration)
 
-@app.get("/healthz")
+@app.get("/health")
 async def health_check():
+    """Health check endpoint for Railway"""
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "healthy",
+            "port": os.getenv("PORT", "8000"),
+            "dlib_model_exists": os.path.exists(os.getenv("DLIB_SHAPE_PREDICTOR", "/models/shape_predictor_68_face_landmarks.dat")),
+            "weights_exist": os.path.exists("pretrain/LipCoordNet_coords_loss_0.025581153109669685_wer_0.01746208431890914_cer_0.006488426950253695.pt")
+        }
+    )
+
+@app.get("/healthz")
+async def health_check_alt():
+    """Alternative health check endpoint"""
     return {"status": "ok", "message": "Server is running"}
 
 @app.get("/")
 async def root():
-    return {"message": "Lipreading API is running"}
+    return {"message": "Lipreading API is running", "version": "1.0.0"}
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
@@ -119,7 +129,6 @@ async def predict(file: UploadFile = File(...)):
 
         # Generate audio file with gTTS - SAVE TO OUTPUTS (PERMANENT)
         try:
-            # Use slower speech for better quality and WhatsApp compatibility
             tts = gTTS(text=str(prediction), lang='en', slow=False)
             tts.save(audio_path)
             logger.info(f"Generated audio file: {audio_path}")
@@ -150,8 +159,8 @@ async def predict(file: UploadFile = File(...)):
                 font_size = max(24, min(48, original_video.w // 20))
                 
                 txt_clip = TextClip(
-                    str(prediction), 
-                    fontsize=font_size, 
+                    str(prediction),
+                    fontsize=font_size,
                     color='white',
                     stroke_color='black',
                     stroke_width=2,
@@ -164,8 +173,8 @@ async def predict(file: UploadFile = File(...)):
                 logger.warning(f"TextClip creation failed: {text_error}")
                 # Simple fallback
                 txt_clip = TextClip(
-                    str(prediction), 
-                    fontsize=24, 
+                    str(prediction),
+                    fontsize=24,
                     color='white'
                 ).set_position('bottom').set_duration(original_video.duration)
                 logger.info("Fallback text clip created")
@@ -186,8 +195,8 @@ async def predict(file: UploadFile = File(...)):
             
             # Write final video
             final_video.write_videofile(
-                output_video_path, 
-                codec="libx264", 
+                output_video_path,
+                codec="libx264",
                 audio_codec="aac",
                 fps=24,
                 verbose=False,
@@ -213,9 +222,10 @@ async def predict(file: UploadFile = File(...)):
             # Continue without video - audio will still be available
             output_video_path = None
 
-        # DEPLOYMENT CHANGE 2: Use environment variable for base URL
-        # This will automatically use Railway's provided URL
-        base_url = os.environ.get("RAILWAY_STATIC_URL", "http://localhost:8080")
+        # Railway automatically provides the correct base URL
+        base_url = os.environ.get("RAILWAY_PUBLIC_DOMAIN", f"https://{os.environ.get('RAILWAY_STATIC_URL', 'localhost:8000')}")
+        if not base_url.startswith('http'):
+            base_url = f"https://{base_url}"
         
         # Verify audio file exists
         audio_uri = None
@@ -271,21 +281,21 @@ async def get_output_file(filename: str):
     # Set proper headers for different file types
     if filename.endswith('.mp3'):
         return FileResponse(
-            file_path, 
+            file_path,
             media_type="audio/mpeg",
             headers={"Content-Disposition": f"attachment; filename={filename}"}
         )
     elif filename.endswith('.mp4'):
         return FileResponse(
-            file_path, 
+            file_path,
             media_type="video/mp4",
             headers={"Content-Disposition": f"attachment; filename={filename}"}
         )
     else:
         return FileResponse(file_path)
 
-# DEPLOYMENT CHANGE 3: Use environment variable for PORT
+# Railway will handle the port automatically
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8080))
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
