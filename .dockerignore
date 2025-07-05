@@ -1,25 +1,77 @@
-.git
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.venv
-venv
-env
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
 .env
-*.env
-*.log
-*.tmp
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
 *.swp
+*.swo
+*~
+
+# OS
 .DS_Store
-*.sqlite3
-*.db
-node_modules
-dist
-build
-*.egg-info
-.ipynb_checkpoints
-*.ipynb
-*.csv
-*.zip
-*.tar.gz
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+
+# Runtime directories (these will be created by the app)
+uploads/
+outputs/
+temp/
+static/
+
+# Git
+.git/
+.gitignore
+
+# Docker
+docker-compose*
+
+# Documentation
+README.md
+*.md
+
+# Tests
+tests/
+test_*
+*_test.py
+
+# Large model files (if you have them locally)
+*.pt
+*.pth
+*.h5
+*.pkl
