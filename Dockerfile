@@ -7,6 +7,11 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 # Copy and install requirements
 COPY requirements.txt .
+
+# Install PyTorch CPU version first
+RUN pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+# Install other requirements
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy app
