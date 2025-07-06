@@ -82,5 +82,5 @@ idna==3.10
 urllib3==2.4.0
 
 # Development and debugging
-decorator==5.2.1
+decorator==4.4.2
 fsspec==2024.6.1
