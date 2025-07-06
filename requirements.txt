@@ -28,11 +28,14 @@ cmake>=3.18
 dlib==19.24.9
 face-alignment==1.4.1
 
-# Video and audio processing
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# Your other packages...
 moviepy==2.2.1
 imageio==2.37.0
 imageio-ffmpeg==0.6.0
 proglog==0.1.12
+
 
 # Text-to-speech
 gTTS==2.5.4
