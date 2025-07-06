@@ -269,8 +269,8 @@ def predict_lip_reading(video_path: str, weights_path: str, device: str = "cpu",
     try:
         # Load model
         model = LipCoordNet()
-        checkpoint = torch.load(weights_path, map_location=torch.device(device), weights_only=False)
-        model.load_state_dict(checkpoint)
+        state_dict = torch.load(weights_path, map_location=torch.device(device))
+        model.load_state_dict(state_dict)
         model = model.to(device)
         model.eval()
         
