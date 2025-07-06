@@ -16,7 +16,7 @@ os.makedirs("outputs", exist_ok=True)
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "port": "8000"}
+    return {"status": "healthy", "message": "API is running"}
 
 @app.get("/")
 async def root():
