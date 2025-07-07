@@ -4,8 +4,11 @@ FROM python:3.10-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies for dlib, OpenCV, moviepy, ImageMagick
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    g++ \
     ffmpeg \
     imagemagick \
     libgl1-mesa-glx \
@@ -14,12 +17,10 @@ RUN apt-get update && apt-get install -y \
     libxext6 \
     libxrender-dev \
     libgomp1 \
-    wget \
-    bzip2 \
-    cmake \
+    python3-dev \
+    curl \
  && sed -i 's/rights="none"/rights="read|write"/g' /etc/ImageMagick-6/policy.xml \
  && rm -rf /var/lib/apt/lists/*
-
 
 # Copy requirements and install dependencies
 COPY requirements.txt .
