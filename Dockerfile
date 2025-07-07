@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y \
     libgomp1 \
     python3-dev \
     curl \
+    wget \      # ✅ Add this line
  && sed -i 's/rights="none"/rights="read|write"/g' /etc/ImageMagick-6/policy.xml \
  && rm -rf /var/lib/apt/lists/*
 
