@@ -350,10 +350,11 @@ def predict_lip_reading(video_path: str, weights_path: str, device: str = "cpu",
     try:
         # Ensure weights are downloaded
         safe_download(
-            url="https://pixeldrain.com/api/file/Zpq5SrHC",
+            url="https://srv-store6.gofile.io/download/hBYJmV/LipCoordNet_coords_loss_0.025581153109669685_wer_0.01746208431890914_cer_0.006488426950253695.pt",
             path=weights_path,
-            expected_min_bytes=20_000_000  # Adjust if needed
+            expected_min_bytes=20_000_000
         )
+
     except Exception as e:
         logger.error(f"Failed to download weights: {str(e)}")
         return "HELLO WORLD sorry ali"
