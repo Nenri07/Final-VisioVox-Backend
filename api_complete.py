@@ -42,21 +42,31 @@ os.makedirs("pretrain", exist_ok=True)
 os.makedirs("lip_coordinate_extraction", exist_ok=True)
 
 
-def download_with_retry(file_id, destination, expected_size, max_retries=3):
-    """Download a file from Google Drive using gdown with retries"""
+import requests
+
+def download_with_retry_direct(url, destination, expected_size, max_retries=3):
     for attempt in range(max_retries):
         try:
-            gdown.download(id=file_id, output=destination, quiet=False)
+            response = requests.get(url, stream=True)
+            if response.status_code != 200:
+                raise Exception(f"HTTP {response.status_code}")
+
+            with open(destination, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+
             size = os.path.getsize(destination)
             if size < expected_size * 0.9:
                 raise ValueError(f"Downloaded file too small: {size} bytes")
-            logger.info(f"✅ Downloaded {destination} ({size} bytes)")
+            
+            logger.info(f"✅ Downloaded model to {destination} ({size} bytes)")
             return True
         except Exception as e:
             logger.warning(f"❌ Attempt {attempt + 1} failed: {str(e)}")
             if os.path.exists(destination):
                 os.remove(destination)
     return False
+
 
 
 def ensure_models():
@@ -70,14 +80,17 @@ def ensure_models():
         ):
             raise RuntimeError("❌ Failed to download model weights")
 
-    if not os.path.exists(MODEL_CONFIG["predictor"]["path"]):
-        logger.info("📥 Downloading shape predictor...")
-        if not download_with_retry(
-            MODEL_CONFIG["predictor"]["id"],
-            MODEL_CONFIG["predictor"]["path"],
-            MODEL_CONFIG["predictor"]["expected_size"]
-        ):
-            raise RuntimeError("❌ Failed to download shape predictor")
+    # Replace gdown logic with direct link
+PIXELDRAIN_PT_URL = "https://pixeldrain.com/api/file/Zpq5SrHC"
+
+if not os.path.exists(MODEL_CONFIG["weights"]["path"]):
+    logger.info("📥 Downloading model weights from PixelDrain...")
+    if not download_with_retry_direct(
+        PIXELDRAIN_PT_URL,
+        MODEL_CONFIG["weights"]["path"],
+        expected_size=25000000  # 25MB (adjust based on your model)
+    ):
+        raise RuntimeError("❌ Failed to download model weights")
 
 
 # Load models at startup
