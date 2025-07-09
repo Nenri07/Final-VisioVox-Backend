@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -13,6 +12,8 @@ import tempfile
 from pathlib import Path
 from dotenv import load_dotenv
 import gdown
+import requests
+import tarfile
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -20,40 +21,86 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
-BASE_URL = os.getenv("BASE_URL", "http://192.168.100.19:8080")
-WEIGHTS_PATH = os.getenv("WEIGHTS_PATH", "pretrain/LipCoordNet_coords_loss_0.025581153109669685_wer_0.01746208431890914_cer_0.006488426950253695.pt")
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8080")
 
-DRIVE_URL = "https://drive.google.com/uc?id=10AgIULFG8Ic6mopDlJ-_BucGy1lEjQhr"  # your file ID
+# Model configuration
+MODEL_CONFIG = {
+    "weights": {
+        "url": "https://drive.google.com/uc?id=10AgIULFG8Ic6mopDlJ-_BucGy1lEjQhr&confirm=t",
+        "path": "pretrain/LipCoordNet.pt",
+        "expected_size": 25300000  # 25.3MB
+    },
+    "predictor": {
+        "url": "https://drive.provider.com/predictor.dat",  # Replace with your hosted file
+        "path": "lip_coordinate_extraction/shape_predictor_68_face_landmarks_GTX.dat",
+        "expected_size": 63000000  # 63MB
+    }
+}
 
 # Create directories
 os.makedirs("static", exist_ok=True)
 os.makedirs("uploads", exist_ok=True)
 os.makedirs("outputs", exist_ok=True)
-os.makedirs("pretrain", exist_ok=True)  # Ensure weights directory exists
+os.makedirs("pretrain", exist_ok=True)
+os.makedirs("lip_coordinate_extraction", exist_ok=True)
 
-# 🟢 Download weights if not present
-def ensure_weights():
-    if not os.path.exists(WEIGHTS_PATH):
+def download_with_retry(url, destination, expected_size, max_retries=3):
+    """Robust downloader with retries and size validation"""
+    for attempt in range(max_retries):
         try:
-            logger.info("Model weights not found, downloading from Google Drive...")
-            gdown.download(DRIVE_URL, WEIGHTS_PATH, fuzzy=True)
-            logger.info("Model weights downloaded successfully.")
+            # Use gdown for Google Drive links
+            if "drive.google.com" in url:
+                gdown.download(url, destination, quiet=False, fuzzy=True)
+            else:
+                # Use requests for direct downloads
+                with requests.get(url, stream=True) as r:
+                    r.raise_for_status()
+                    with open(destination, 'wb') as f:
+                        for chunk in r.iter_content(chunk_size=8192):
+                            f.write(chunk)
+            
+            # Verify download
+            if os.path.getsize(destination) < expected_size * 0.9:  # 90% threshold
+                raise ValueError(f"File too small (expected {expected_size} bytes)")
+            
+            logger.info(f"Downloaded {os.path.basename(destination)} successfully")
+            return True
+            
         except Exception as e:
-            logger.error(f"Failed to download weights: {e}")
-            raise RuntimeError(f"Could not download weights: {e}")
+            logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
+            if os.path.exists(destination):
+                os.remove(destination)
+    
+    return False
 
-# Run at app startup
-ensure_weights()
+def ensure_models():
+    """Ensure all model files are available"""
+    # Download weights
+    if not os.path.exists(MODEL_CONFIG["weights"]["path"]):
+        logger.info("Downloading model weights...")
+        if not download_with_retry(
+            MODEL_CONFIG["weights"]["url"],
+            MODEL_CONFIG["weights"]["path"],
+            MODEL_CONFIG["weights"]["expected_size"]
+        ):
+            raise RuntimeError("Failed to download model weights")
 
+    # Download predictor
+    if not os.path.exists(MODEL_CONFIG["predictor"]["path"]):
+        logger.info("Downloading shape predictor...")
+        if not download_with_retry(
+            MODEL_CONFIG["predictor"]["url"],
+            MODEL_CONFIG["predictor"]["path"],
+            MODEL_CONFIG["predictor"]["expected_size"]
+        ):
+            raise RuntimeError("Failed to download shape predictor")
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Load environment variables
-load_dotenv()
-BASE_URL = os.getenv("BASE_URL", "http://192.168.100.19:8080")
-WEIGHTS_PATH = os.getenv("WEIGHTS_PATH", "pretrain/LipCoordNet_coords_loss_0.025581153109669685_wer_0.01746208431890914_cer_0.006488426950253695.pt")
+# Initialize models at startup
+try:
+    ensure_models()
+except Exception as e:
+    logger.error(f"CRITICAL: Model initialization failed - {str(e)}")
+    raise
 
 app = FastAPI(
     title="Lipreading API",
@@ -61,16 +108,11 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Create directories
-os.makedirs("static", exist_ok=True)
-os.makedirs("uploads", exist_ok=True)
-os.makedirs("outputs", exist_ok=True)
-
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
 
-# Add CORS middleware
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -81,128 +123,73 @@ app.add_middleware(
 
 @app.middleware("http")
 async def log_requests(request, call_next):
-    logger.info(f"Incoming request: {request.method} {request.url}")
+    logger.info(f"Request: {request.method} {request.url}")
     response = await call_next(request)
-    logger.info(f"Response status: {response.status_code}")
+    logger.info(f"Response: {response.status_code}")
     return response
 
 @app.get("/healthz")
 async def health_check():
     return {
         "status": "ok",
-        "message": "Server is running",
-        "lip_reading_available": True,
-        "audio_generation_available": True
-    }
-
-@app.get("/")
-async def root():
-    return {
-        "message": "Lipreading API is running",
-        "features": {
-            "lip_reading": True,
-            "audio_generation": True,
-            "video_generation": False
+        "models_loaded": {
+            "weights": os.path.exists(MODEL_CONFIG["weights"]["path"]),
+            "predictor": os.path.exists(MODEL_CONFIG["predictor"]["path"])
         }
     }
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
+    # Validate file type
     allowed_types = ["video/mp4", "video/quicktime", "video/x-msvideo"]
-    if not file.content_type or file.content_type not in allowed_types:
-        logger.error(f"Invalid file type: {file.content_type}")
-        raise HTTPException(status_code=400, detail="Only MP4, MOV, or AVI files are accepted")
+    if file.content_type not in allowed_types:
+        raise HTTPException(400, detail="Only MP4, MOV or AVI files allowed")
 
-    # Validate file size (100MB limit)
+    # Validate file size (100MB max)
     content = await file.read()
     if len(content) > 100 * 1024 * 1024:
-        logger.error("File size exceeds 100MB")
-        raise HTTPException(status_code=413, detail="File too large. Max 100MB.")
+        raise HTTPException(413, detail="File too large (max 100MB)")
 
     unique_id = str(uuid.uuid4())
-    
-    # Initialize variables
     temp_dir = tempfile.mkdtemp()
-    video_path = os.path.join(temp_dir, f"temp_{unique_id}_{file.filename or 'video.mp4'}")
-    audio_filename = f"audio_{unique_id}.mp3"
-    audio_path = os.path.join("outputs", audio_filename)
     
     try:
         # Save uploaded file
-        with open(video_path, "wb") as buffer:
-            buffer.write(content)
-        logger.info(f"Successfully saved video to {video_path}")
-
-        # Check weights file
-        if not os.path.exists(WEIGHTS_PATH):
-            logger.error(f"Weights file not found: {WEIGHTS_PATH}")
-            raise HTTPException(status_code=404, detail="Model weights not found")
-
-        # Run lip-reading prediction
-        try:
-            prediction = predict_lip_reading(
-                video_path=video_path,
-                weights_path=WEIGHTS_PATH,
-                device="cpu",
-                output_path="static"
-            )
-            logger.info(f"Prediction completed: {prediction}")
-        except Exception as e:
-            logger.error(f"Prediction failed: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Lip-reading prediction failed: {str(e)}")
+        video_path = os.path.join(temp_dir, f"input_{unique_id}.mp4")
+        with open(video_path, "wb") as f:
+            f.write(content)
+        
+        # Run prediction
+        prediction = predict_lip_reading(
+            video_path=video_path,
+            weights_path=MODEL_CONFIG["weights"]["path"],
+            device="cpu"
+        )
 
         # Generate audio
-        try:
-            tts = gTTS(text=str(prediction), lang='en', slow=False)
-            tts.save(audio_path)
-            logger.info(f"Generated audio file: {audio_path}")
-            if not os.path.exists(audio_path):
-                raise HTTPException(status_code=500, detail="Audio file was not created")
-        except Exception as e:
-            logger.error(f"TTS generation failed: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Audio generation failed: {str(e)}")
+        audio_path = os.path.join("outputs", f"output_{unique_id}.mp3")
+        tts = gTTS(text=prediction, lang='en')
+        tts.save(audio_path)
 
-        # Prepare response
-        audio_uri = f"{BASE_URL}/outputs/{audio_filename}" if os.path.exists(audio_path) else None
+        return {
+            "prediction": prediction,
+            "audio_url": f"{BASE_URL}/outputs/{os.path.basename(audio_path)}",
+            "success": True
+        }
 
-        return JSONResponse(content={
-            "prediction": str(prediction),
-            "audioUri": audio_uri,
-            "videoUri": None,
-            "success": True,
-            "video_generated": False
-        })
-
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Unexpected error during prediction: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        logger.error(f"Prediction failed: {str(e)}")
+        raise HTTPException(500, detail=str(e))
     finally:
-        # Clean up temporary directory
-        try:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-            logger.info(f"Cleaned up temp directory: {temp_dir}")
-        except Exception as e:
-            logger.warning(f"Could not remove temp directory {temp_dir}: {str(e)}")
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 @app.get("/outputs/{filename}")
-async def get_output_file(filename: str):
+async def get_output(filename: str):
     file_path = os.path.join("outputs", filename)
     if not os.path.exists(file_path):
-        logger.error(f"File not found: {file_path}")
-        raise HTTPException(status_code=404, detail="File not found")
-    
-    if filename.endswith('.mp3'):
-        return FileResponse(
-            file_path,
-            media_type="audio/mpeg",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
-        )
-    else:
-        return FileResponse(file_path)
+        raise HTTPException(404, detail="File not found")
+    return FileResponse(file_path)
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8080))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
