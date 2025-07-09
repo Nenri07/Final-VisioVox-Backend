@@ -1,5 +1,5 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import shutil
 import os
@@ -9,110 +9,95 @@ import uuid
 from fastapi.middleware.cors import CORSMiddleware
 from inference import predict_lip_reading
 import tempfile
-from pathlib import Path
 from dotenv import load_dotenv
 import gdown
-import requests
-import tarfile
 
-# Configure logging
+# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Load environment variables
+# Load env
 load_dotenv()
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8080")
 
-# Model configuration
+# 🔧 Fixed: use only FILE ID (not full URL)
 MODEL_CONFIG = {
     "weights": {
-        "url": "https://drive.google.com/uc?id=10AgIULFG8Ic6mopDlJ-_BucGy1lEjQhr&confirm=t",
+        "id": "10AgIULFG8Ic6mopDlJ-_BucGy1lEjQhr",  # ✅ your .pt file
         "path": "pretrain/LipCoordNet.pt",
-        "expected_size": 25300000  # 25.3MB
+        "expected_size": 25000000  # ~25MB
     },
     "predictor": {
-        "url": "https://drive.provider.com/predictor.dat",  # Replace with your hosted file
+        "id": "1M_hRmE2zezyQrf3XyUjc2gTOFXcGmbLL",  # ✅ shape_predictor file
         "path": "lip_coordinate_extraction/shape_predictor_68_face_landmarks_GTX.dat",
-        "expected_size": 63000000  # 63MB
+        "expected_size": 63000000  # ~63MB
     }
 }
 
-# Create directories
+# Create folders
 os.makedirs("static", exist_ok=True)
 os.makedirs("uploads", exist_ok=True)
 os.makedirs("outputs", exist_ok=True)
 os.makedirs("pretrain", exist_ok=True)
 os.makedirs("lip_coordinate_extraction", exist_ok=True)
 
-def download_with_retry(url, destination, expected_size, max_retries=3):
-    """Robust downloader with retries and size validation"""
+
+def download_with_retry(file_id, destination, expected_size, max_retries=3):
+    """Download a file from Google Drive using gdown with retries"""
     for attempt in range(max_retries):
         try:
-            # Use gdown for Google Drive links
-            if "drive.google.com" in url:
-                gdown.download(url, destination, quiet=False, fuzzy=True)
-            else:
-                # Use requests for direct downloads
-                with requests.get(url, stream=True) as r:
-                    r.raise_for_status()
-                    with open(destination, 'wb') as f:
-                        for chunk in r.iter_content(chunk_size=8192):
-                            f.write(chunk)
-            
-            # Verify download
-            if os.path.getsize(destination) < expected_size * 0.9:  # 90% threshold
-                raise ValueError(f"File too small (expected {expected_size} bytes)")
-            
-            logger.info(f"Downloaded {os.path.basename(destination)} successfully")
+            gdown.download(id=file_id, output=destination, quiet=False)
+            size = os.path.getsize(destination)
+            if size < expected_size * 0.9:
+                raise ValueError(f"Downloaded file too small: {size} bytes")
+            logger.info(f"✅ Downloaded {destination} ({size} bytes)")
             return True
-            
         except Exception as e:
-            logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
+            logger.warning(f"❌ Attempt {attempt + 1} failed: {str(e)}")
             if os.path.exists(destination):
                 os.remove(destination)
-    
     return False
 
+
 def ensure_models():
-    """Ensure all model files are available"""
-    # Download weights
+    """Ensure both model weight and predictor are downloaded"""
     if not os.path.exists(MODEL_CONFIG["weights"]["path"]):
-        logger.info("Downloading model weights...")
+        logger.info("📥 Downloading model weights...")
         if not download_with_retry(
-            MODEL_CONFIG["weights"]["url"],
+            MODEL_CONFIG["weights"]["id"],
             MODEL_CONFIG["weights"]["path"],
             MODEL_CONFIG["weights"]["expected_size"]
         ):
-            raise RuntimeError("Failed to download model weights")
+            raise RuntimeError("❌ Failed to download model weights")
 
-    # Download predictor
     if not os.path.exists(MODEL_CONFIG["predictor"]["path"]):
-        logger.info("Downloading shape predictor...")
+        logger.info("📥 Downloading shape predictor...")
         if not download_with_retry(
-            MODEL_CONFIG["predictor"]["url"],
+            MODEL_CONFIG["predictor"]["id"],
             MODEL_CONFIG["predictor"]["path"],
             MODEL_CONFIG["predictor"]["expected_size"]
         ):
-            raise RuntimeError("Failed to download shape predictor")
+            raise RuntimeError("❌ Failed to download shape predictor")
 
-# Initialize models at startup
+
+# Load models at startup
 try:
     ensure_models()
 except Exception as e:
     logger.error(f"CRITICAL: Model initialization failed - {str(e)}")
     raise
 
+# FastAPI app setup
 app = FastAPI(
     title="Lipreading API",
-    description="API for lip-reading from videos with audio output",
+    description="API for lip-reading from videos and generating audio output",
     version="1.0.0"
 )
 
-# Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
 
-# CORS configuration
+# Allow frontend to connect
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -120,13 +105,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.middleware("http")
-async def log_requests(request, call_next):
-    logger.info(f"Request: {request.method} {request.url}")
-    response = await call_next(request)
-    logger.info(f"Response: {response.status_code}")
-    return response
 
 @app.get("/healthz")
 async def health_check():
@@ -140,33 +118,31 @@ async def health_check():
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
-    # Validate file type
     allowed_types = ["video/mp4", "video/quicktime", "video/x-msvideo"]
     if file.content_type not in allowed_types:
         raise HTTPException(400, detail="Only MP4, MOV or AVI files allowed")
 
-    # Validate file size (100MB max)
     content = await file.read()
     if len(content) > 100 * 1024 * 1024:
         raise HTTPException(413, detail="File too large (max 100MB)")
 
     unique_id = str(uuid.uuid4())
     temp_dir = tempfile.mkdtemp()
-    
+
     try:
-        # Save uploaded file
+        # Save the uploaded video
         video_path = os.path.join(temp_dir, f"input_{unique_id}.mp4")
         with open(video_path, "wb") as f:
             f.write(content)
-        
-        # Run prediction
+
+        # Run the prediction
         prediction = predict_lip_reading(
             video_path=video_path,
             weights_path=MODEL_CONFIG["weights"]["path"],
             device="cpu"
         )
 
-        # Generate audio
+        # Generate audio from prediction
         audio_path = os.path.join("outputs", f"output_{unique_id}.mp3")
         tts = gTTS(text=prediction, lang='en')
         tts.save(audio_path)
@@ -182,6 +158,7 @@ async def predict(file: UploadFile = File(...)):
         raise HTTPException(500, detail=str(e))
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 @app.get("/outputs/{filename}")
 async def get_output(filename: str):
