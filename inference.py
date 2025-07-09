@@ -11,13 +11,42 @@ from model import LipCoordNet
 import glob
 import tempfile
 from pathlib import Path
+import requests
+
 
 import os
 os.environ["IMAGEIO_FFMPEG_EXE"] = "/usr/bin/ffmpeg"
 
 
+import bz2
 
-import requests
+def download_dlib_predictor(target_path="shape_predictor_68_face_landmarks.dat"):
+    if os.path.exists(target_path):
+        logger.info(f"Dlib predictor already exists at: {target_path}")
+        return
+    
+    url = "http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2"
+    logger.info(f"Downloading dlib predictor from: {url}")
+    
+    response = requests.get(url, stream=True)
+    if response.status_code != 200:
+        raise RuntimeError(f"Failed to download predictor: {response.status_code}")
+    
+    # Save the .bz2 file temporarily
+    temp_bz2 = target_path + ".bz2"
+    with open(temp_bz2, 'wb') as f:
+        for chunk in response.iter_content(1024 * 1024):
+            f.write(chunk)
+    
+    # Decompress .bz2 to .dat
+    with open(target_path, 'wb') as new_file, bz2.BZ2File(temp_bz2, 'rb') as zip_file:
+        for data in iter(lambda: zip_file.read(100 * 1024), b''):
+            new_file.write(data)
+    
+    os.remove(temp_bz2)
+    logger.info(f"Dlib predictor saved to: {target_path}")
+
+
 
 def safe_download(url: str, path: str, expected_min_bytes: int = 5_000_000):
     if os.path.exists(path):
@@ -190,25 +219,24 @@ def load_video(video_path: str, device: str = "cpu"):
         # Initialize dlib detector and predictor
         detector = dlib.get_frontal_face_detector()
         
-        # Check for predictor file
-        predictor_paths = [
-            "lip_coordinate_extraction/shape_predictor_68_face_landmarks_GTX.dat",
-            "shape_predictor_68_face_landmarks.dat",
-            "shape_predictor_68_face_landmarks_GTX.dat"
-        ]
-        
-        predictor_path = None
-        for path in predictor_paths:
-            if os.path.exists(path):
-                predictor_path = path
-                break
-        
-        if not predictor_path:
-            logger.error("Dlib predictor not found")
-            raise FileNotFoundError("Dlib face landmarks predictor not found")
-        
-        predictor = dlib.shape_predictor(predictor_path)
-        
+           predictor_paths = [
+        "lip_coordinate_extraction/shape_predictor_68_face_landmarks_GTX.dat",
+        "shape_predictor_68_face_landmarks.dat",
+        "shape_predictor_68_face_landmarks_GTX.dat"
+    ]
+    
+    predictor_path = None
+    for path in predictor_paths:
+        if os.path.exists(path):
+            predictor_path = path
+            break
+    
+    if not predictor_path:
+        predictor_path = "shape_predictor_68_face_landmarks.dat"
+        download_dlib_predictor(predictor_path)
+    
+    predictor = dlib.shape_predictor(predictor_path)
+
         # Process frames using original method
         front256 = get_position(256)
         video_frames = []
