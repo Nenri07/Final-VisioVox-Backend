@@ -12,6 +12,39 @@ from inference import predict_lip_reading
 import tempfile
 from pathlib import Path
 from dotenv import load_dotenv
+import gdown
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Load environment variables
+load_dotenv()
+BASE_URL = os.getenv("BASE_URL", "http://192.168.100.19:8080")
+WEIGHTS_PATH = os.getenv("WEIGHTS_PATH", "pretrain/LipCoordNet_coords_loss_0.025581153109669685_wer_0.01746208431890914_cer_0.006488426950253695.pt")
+
+DRIVE_URL = "https://drive.google.com/uc?id=10AgIULFG8Ic6mopDlJ-_BucGy1lEjQhr"  # your file ID
+
+# Create directories
+os.makedirs("static", exist_ok=True)
+os.makedirs("uploads", exist_ok=True)
+os.makedirs("outputs", exist_ok=True)
+os.makedirs("pretrain", exist_ok=True)  # Ensure weights directory exists
+
+# 🟢 Download weights if not present
+def ensure_weights():
+    if not os.path.exists(WEIGHTS_PATH):
+        try:
+            logger.info("Model weights not found, downloading from Google Drive...")
+            gdown.download(DRIVE_URL, WEIGHTS_PATH, fuzzy=True)
+            logger.info("Model weights downloaded successfully.")
+        except Exception as e:
+            logger.error(f"Failed to download weights: {e}")
+            raise RuntimeError(f"Could not download weights: {e}")
+
+# Run at app startup
+ensure_weights()
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
