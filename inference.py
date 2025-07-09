@@ -294,17 +294,17 @@ def ctc_decode(y):
     return result
 
 def predict_lip_reading(video_path: str, weights_path: str, device: str = "cpu", output_path: str = "output_videos") -> str:
-   try:
-    safe_download(
-        url="https://pixeldrain.com/api/file/Zpq5SrHC",
-        path=weights_path,
-        expected_min_bytes=20_000_000  # Adjust if needed
-    )
-except Exception as e:
-    logger.error(f"Failed to download weights: {str(e)}")
-    return "HELLO WORLD sorry ali"
+    try:
+        # Ensure weights are downloaded
+        safe_download(
+            url="https://pixeldrain.com/api/file/Zpq5SrHC",
+            path=weights_path,
+            expected_min_bytes=20_000_000  # Adjust if needed
+        )
+    except Exception as e:
+        logger.error(f"Failed to download weights: {str(e)}")
+        return "HELLO WORLD sorry ali"
 
-    
     try:
         # Load model
         model = LipCoordNet()
@@ -341,12 +341,13 @@ except Exception as e:
         
         logger.info(f"Prediction result: {result}")
         return result
-        
+
     except Exception as e:
         logger.error(f"Error during prediction: {str(e)}")
         import traceback
         logger.error(f"Full traceback: {traceback.format_exc()}")
         return "HELLO WORLD"
+
 
 if __name__ == "__main__":
     import argparse
