@@ -18,6 +18,31 @@ os.environ["IMAGEIO_FFMPEG_EXE"] = "/usr/bin/ffmpeg"
 
 import bz2
 
+
+def download_predictor_if_needed():
+    url = "https://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2"
+    bz2_path = "lip_coordinate_extraction/shape_predictor_68_face_landmarks.dat.bz2"
+    dat_path = "lip_coordinate_extraction/shape_predictor_68_face_landmarks.dat"
+
+    if os.path.exists(dat_path):
+        logger.info("Predictor file already exists.")
+        return
+
+    logger.info("Downloading shape_predictor_68_face_landmarks.dat.bz2 ...")
+    response = requests.get(url, stream=True)
+    with open(bz2_path, 'wb') as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
+
+    import bz2
+    logger.info("Extracting .dat file ...")
+    with bz2.BZ2File(bz2_path) as f_in, open(dat_path, 'wb') as f_out:
+        f_out.write(f_in.read())
+
+    os.remove(bz2_path)
+    logger.info("Predictor file ready at " + dat_path)
+
+
 def download_dlib_predictor(target_path="shape_predictor_68_face_landmarks.dat"):
     if os.path.exists(target_path):
         logger.info(f"Dlib predictor already exists at: {target_path}")
@@ -214,6 +239,10 @@ def load_video(video_path: str, device: str = "cpu"):
 
         # Initialize dlib detector and predictor
         detector = dlib.get_frontal_face_detector()
+
+        download_predictor_if_needed()
+
+
         
         predictor_paths = [
             "lip_coordinate_extraction/shape_predictor_68_face_landmarks_GTX.dat",
