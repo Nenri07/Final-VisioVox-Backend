@@ -13,10 +13,8 @@ import tempfile
 from pathlib import Path
 import requests
 
-
 import os
 os.environ["IMAGEIO_FFMPEG_EXE"] = "/usr/bin/ffmpeg"
-
 
 import bz2
 
@@ -45,8 +43,6 @@ def download_dlib_predictor(target_path="shape_predictor_68_face_landmarks.dat")
     
     os.remove(temp_bz2)
     logger.info(f"Dlib predictor saved to: {target_path}")
-
-
 
 def safe_download(url: str, path: str, expected_min_bytes: int = 5_000_000):
     if os.path.exists(path):
@@ -219,23 +215,23 @@ def load_video(video_path: str, device: str = "cpu"):
         # Initialize dlib detector and predictor
         detector = dlib.get_frontal_face_detector()
         
-           predictor_paths = [
-        "lip_coordinate_extraction/shape_predictor_68_face_landmarks_GTX.dat",
-        "shape_predictor_68_face_landmarks.dat",
-        "shape_predictor_68_face_landmarks_GTX.dat"
-    ]
-    
-    predictor_path = None
-    for path in predictor_paths:
-        if os.path.exists(path):
-            predictor_path = path
-            break
-    
-    if not predictor_path:
-        predictor_path = "shape_predictor_68_face_landmarks.dat"
-        download_dlib_predictor(predictor_path)
-    
-    predictor = dlib.shape_predictor(predictor_path)
+        predictor_paths = [
+            "lip_coordinate_extraction/shape_predictor_68_face_landmarks_GTX.dat",
+            "shape_predictor_68_face_landmarks.dat",
+            "shape_predictor_68_face_landmarks_GTX.dat"
+        ]
+        
+        predictor_path = None
+        for path in predictor_paths:
+            if os.path.exists(path):
+                predictor_path = path
+                break
+        
+        if not predictor_path:
+            predictor_path = "shape_predictor_68_face_landmarks.dat"
+            download_dlib_predictor(predictor_path)
+        
+        predictor = dlib.shape_predictor(predictor_path)
 
         # Process frames using original method
         front256 = get_position(256)
@@ -375,7 +371,6 @@ def predict_lip_reading(video_path: str, weights_path: str, device: str = "cpu",
         import traceback
         logger.error(f"Full traceback: {traceback.format_exc()}")
         return "HELLO WORLD"
-
 
 if __name__ == "__main__":
     import argparse
