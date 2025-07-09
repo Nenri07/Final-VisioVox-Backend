@@ -15,6 +15,35 @@ from pathlib import Path
 import os
 os.environ["IMAGEIO_FFMPEG_EXE"] = "/usr/bin/ffmpeg"
 
+
+
+import requests
+
+def safe_download(url: str, path: str, expected_min_bytes: int = 5_000_000):
+    if os.path.exists(path):
+        size = os.path.getsize(path)
+        if size >= expected_min_bytes:
+            logger.info(f"Model already downloaded: {path} ({size} bytes)")
+            return
+        else:
+            logger.warning(f"Model exists but too small ({size} bytes). Re-downloading.")
+            os.remove(path)
+
+    logger.info(f"Downloading model from: {url}")
+    response = requests.get(url, stream=True)
+    if response.status_code != 200:
+        raise RuntimeError(f"Download failed with status code: {response.status_code}")
+    
+    with open(path, 'wb') as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
+
+    size = os.path.getsize(path)
+    if size < expected_min_bytes:
+        raise RuntimeError("Downloaded file is incomplete or corrupted.")
+    
+    logger.info(f"Downloaded model to {path} ({size} bytes)")
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -265,9 +294,16 @@ def ctc_decode(y):
     return result
 
 def predict_lip_reading(video_path: str, weights_path: str, device: str = "cpu", output_path: str = "output_videos") -> str:
-    if not os.path.exists(weights_path):
-        logger.error(f"Weights file not found: {weights_path}")
-        return "HELLO WORLD"
+   try:
+    safe_download(
+        url="https://pixeldrain.com/api/file/Zpq5SrHC",
+        path=weights_path,
+        expected_min_bytes=20_000_000  # Adjust if needed
+    )
+except Exception as e:
+    logger.error(f"Failed to download weights: {str(e)}")
+    return "HELLO WORLD sorry ali"
+
     
     try:
         # Load model
